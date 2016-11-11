@@ -1,4 +1,5 @@
 import numpy as np
+import allantools
 
 #Provieds the taumin based on the most frequent
 def optimal_tau_min(times):
@@ -24,25 +25,17 @@ def singleAllan(splitlist=[], tau0=-1., m=1, maxpnts=np.inf):
         return None
     squarediffs = []
     weights = []
-    l = 0
-    cont = True
-    # If NO. of averages is limited, bifurcation selects spread samples
-    if maxpnts != np.inf:
-        bif = bifur(m)
-    while cont:
-        if maxpnts == np.inf:
-            cont = l < m
-        else:
-            nex = bif.nextm()
-            if len(weights) < maxpnts and nex != -1:
-                # print nex
-                cont = True
-            else:
-                cont = False
-        # Core calculation zone
+    number_of_bins=len(splitlist)
+    #Setup of start indeces
+    if maxpnts >= number_of_bins:
+        start_indices=range(number_of_bins-2*m)
+    else:
+        start_indices=range(0,number_of_bins-2*m,(number_of_bins-2*m)/maxpnts)
+    for start_index in start_indices:
+        #This includes one elem of squarediffs etc.
         blockdiffs = []
         blockmeans = []
-        for n in xrange(l, len(splitlist) - m - l, m):  # List of all start points from l till end in m-sized steps
+        for n in xrange(start_index, number_of_bins - m - start_index, m):  # List of all start points from l till end in m-sized steps
             times = []
             values = []
             for i in splitlist[n:n + m]:  # collecting of subelemtns of one m-sized block
@@ -62,10 +55,39 @@ def singleAllan(splitlist=[], tau0=-1., m=1, maxpnts=np.inf):
                 if not np.isnan(blockmeans[k:k + 2]).any():
                     squarediffs.append((blockmeans[k] - blockmeans[k + 1]) ** 2)
                     weights.append(1. / np.max([blockdiffs[k], blockdiffs[k + 1]]))
-        l += 1
     # print squarediffs
     # print weights
     wSum = float(np.sum(weights))
     oadev = np.sqrt(0.5 * np.sum([squarediffs[i] * w for i, w in enumerate(weights)]) / wSum)
     eadv = oadev / np.sqrt(wSum)
     return oadev, eadv, tau0 * m
+
+
+m = 1
+taus = [m]
+nop = 5
+data = [ i for i in range(nop)]
+
+times=np.array([i for i in xrange(nop)])
+rate = (len(times) - 1) / float(times[-1] - times[0])
+print "rate %f" % (rate)
+def altertheo(m):
+    return m * float(1) / np.sqrt(2.)
+
+
+print "allan theo: %f" % (altertheo(m))
+t2, ad, ade, adn = allantools.oadev(data, rate=rate, data_type='freq', taus=taus)
+print t2
+print "official: %f" % (ad)
+print "error official %f" %(ade)
+quick = np.sqrt(0.5 * np.mean([(np.mean(data[i:i + m]) - np.mean(data[i + m:i + 2 * m])) ** 2
+                               for i in range(0, len(data) - 2 * m)]))
+print "quickvalue: %f" % (quick)
+
+
+splitlist, tauminout = IrregAllanPrep(times, data, taumin=1.)
+oadev, eadev, taueff = singleAllan(splitlist, tauminout, m=m, maxpnts=np.inf)
+print "error irreg: %f" %(eadev)
+
+print "Irreg Oadev: %f" % (oadev)
+
